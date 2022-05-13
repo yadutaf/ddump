@@ -34,7 +34,7 @@ Reference
 Settings
 ++++++++
 
-* ``-listen``: Address and port to listen on. (default: :8475)
+* ``-listen``: Address to listen on. May be an "<address>:<port>" or "unix:<path>". (default: :8475)
 
 API
 +++

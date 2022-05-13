@@ -2,7 +2,9 @@ package server
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
 )
@@ -36,6 +38,20 @@ func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
 func Serve(listen string) error {
 	http.HandleFunc("/capture", httpCaptureHandler)
 
+	// Create listener, with support for Unix domain sockets
+	var ln net.Listener
+	var err error
+	if strings.HasPrefix(listen, "unix:") {
+		ln, err = net.Listen("unix", listen[5:])
+	} else {
+		ln, err = net.Listen("tcp", listen)
+	}
+
+	if err != nil {
+		return err
+	}
 	log.Printf("Listening on %s", listen)
-	return http.ListenAndServe(listen, nil)
+
+	// Start server
+	return http.Serve(ln, nil)
 }
