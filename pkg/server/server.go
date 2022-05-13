@@ -14,6 +14,23 @@ const (
 	DEFAULT_CAPTURE_FILTER    = ""
 )
 
+type flushedResponseWriter struct {
+	w *http.ResponseWriter
+}
+
+func (frw *flushedResponseWriter) Write(p []byte) (n int, err error) {
+	n, err = (*frw.w).Write(p)
+	if err != nil {
+		return
+	}
+
+	if f, ok := (*frw.w).(http.Flusher); ok {
+		f.Flush()
+	}
+
+	return
+}
+
 func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode request
 	captureIfName := r.URL.Query().Get("interface")
@@ -29,7 +46,8 @@ func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
 
 	// Capture
-	if err := capture.Capture(captureIfName, captureFilter, w); err != nil {
+	pcapWriter := flushedResponseWriter{w: &w}
+	if err := capture.Capture(captureIfName, captureFilter, &pcapWriter); err != nil {
 		log.Printf("capture: %v", err)
 		return
 	}
