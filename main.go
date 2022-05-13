@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
+	"net/http"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	MAX_PACKET_LENGTH = 9000
+	MAX_PACKET_LENGTH         = 9000
+	DEFAULT_CAPTURE_INTERFACE = "any"
+	DEFAULT_CAPTURE_FILTER    = ""
 )
 
 func capture(ifName string, filter string, w io.Writer) error {
@@ -41,33 +43,34 @@ func capture(ifName string, filter string, w io.Writer) error {
 	return nil
 }
 
-func openDestination(destination string) (*os.File, error) {
-	if destination == "-" {
-		if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) != 0 {
-			return nil, fmt.Errorf("Destination is a terminal. Please use -destination or redirect the output")
-		}
-		return os.Stdout, nil
+func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
+	// Decode request
+	captureIfName := r.URL.Query().Get("interface")
+	if captureIfName == "" {
+		captureIfName = DEFAULT_CAPTURE_INTERFACE
+	}
+	captureFilter := r.URL.Query().Get("filter")
+	if captureFilter == "" {
+		captureFilter = DEFAULT_CAPTURE_FILTER
 	}
 
-	return os.Create(destination)
+	// Set content type
+	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
+
+	// Capture
+	if err := capture(captureIfName, captureFilter, w); err != nil {
+		log.Printf("capture: %v", err)
+		return
+	}
 }
 
 func main() {
 	// Parse arguments
-	captureIfName := flag.String("interface", "any", "Name of the interface to capture")
-	captureFilter := flag.String("filter", "", "capture filter using tcpdump's DSL")
-	captureDestination := flag.String("destination", "-", "destination file for captured packets")
+	serverListen := flag.String("listen", ":8475", "Server address")
 	flag.Parse()
 
-	// Configure destination
-	f, err := openDestination(*captureDestination)
-	if err != nil {
-		log.Fatalf("Failed to set destination to %s: %v", *captureDestination, err)
-	}
-	defer f.Close()
+	http.HandleFunc("/capture", httpCaptureHandler)
 
-	// Capture
-	if err := capture(*captureIfName, *captureFilter, f); err != nil {
-		log.Fatalf("capture: %v", err)
-	}
+	log.Printf("Listening on %s", *serverListen)
+	log.Fatal(http.ListenAndServe(*serverListen, nil))
 }
