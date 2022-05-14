@@ -1,2 +1,5 @@
-distributed-tcpdump
+# Executables
+/ddump-worker
 
+# IDE
+.vscode

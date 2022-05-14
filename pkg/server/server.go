@@ -31,7 +31,7 @@ func (frw *flushedResponseWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
+func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode request
 	captureIfName := r.URL.Query().Get("interface")
 	if captureIfName == "" {
@@ -54,8 +54,6 @@ func httpCaptureHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Serve(listen string) error {
-	http.HandleFunc("/capture", httpCaptureHandler)
-
 	// Create listener, with support for Unix domain sockets
 	var ln net.Listener
 	var err error

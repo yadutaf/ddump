@@ -1,5 +1,5 @@
 build:
-	go build .
+	go build ./cmd/*
 
 clean:
-	rm -f distributed-tcpdump
+	rm -f ddump-worker

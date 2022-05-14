@@ -18,10 +18,10 @@ Usage
 make
 
 # Allow running without root
-sudo setcap cap_net_raw=eip distributed-tcpdump
+sudo setcap cap_net_raw=eip ddump-worker
 
 # Run
-./distributed-tcpdump
+./ddump-worker
 
 # Query
 curl http://localhost:8475/capture -vo ./full-capture.pcap
