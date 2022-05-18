@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
 )
@@ -14,21 +15,43 @@ const (
 	DEFAULT_CAPTURE_FILTER    = ""
 )
 
-type flushedResponseWriter struct {
-	w *http.ResponseWriter
+type FlushedResponseWriter struct {
+	w    *http.ResponseWriter
+	done chan struct{}
 }
 
-func (frw *flushedResponseWriter) Write(p []byte) (n int, err error) {
-	n, err = (*frw.w).Write(p)
-	if err != nil {
-		return
+func NewFlushedResponseWriter(w *http.ResponseWriter) *FlushedResponseWriter {
+	frw := FlushedResponseWriter{
+		w:    w,
+		done: make(chan struct{}),
 	}
 
-	if f, ok := (*frw.w).(http.Flusher); ok {
-		f.Flush()
-	}
+	// Flush every second if bytes were sent and until done
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
 
-	return
+		for {
+			select {
+			case <-ticker.C:
+				if f, ok := (*frw.w).(http.Flusher); ok {
+					f.Flush()
+				}
+			case <-frw.done:
+				return
+			}
+		}
+	}()
+
+	return &frw
+}
+
+func (frw *FlushedResponseWriter) Close() {
+	close(frw.done)
+}
+
+func (frw *FlushedResponseWriter) Write(p []byte) (n int, err error) {
+	return (*frw.w).Write(p)
 }
 
 func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +69,9 @@ func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
 
 	// Capture
-	pcapWriter := flushedResponseWriter{w: &w}
-	if err := capture.Capture(captureIfName, captureFilter, &pcapWriter); err != nil {
+	pcapWriter := NewFlushedResponseWriter(&w)
+	defer pcapWriter.Close()
+	if err := capture.Capture(captureIfName, captureFilter, pcapWriter); err != nil {
 		log.Printf("capture: %v", err)
 		return
 	}
