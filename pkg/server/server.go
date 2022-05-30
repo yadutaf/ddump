@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	DEFAULT_CAPTURE_INTERFACE = "any"
-	DEFAULT_CAPTURE_FILTER    = ""
+	DEFAULT_CAPTURE_FILTER = ""
 )
 
 type FlushedResponseWriter struct {
@@ -56,10 +55,6 @@ func (frw *FlushedResponseWriter) Write(p []byte) (n int, err error) {
 
 func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode request
-	captureIfName := r.URL.Query().Get("interface")
-	if captureIfName == "" {
-		captureIfName = DEFAULT_CAPTURE_INTERFACE
-	}
 	captureFilter := r.URL.Query().Get("filter")
 	if captureFilter == "" {
 		captureFilter = DEFAULT_CAPTURE_FILTER
@@ -71,7 +66,7 @@ func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	// Capture
 	pcapWriter := NewFlushedResponseWriter(&w)
 	defer pcapWriter.Close()
-	if err := capture.Capture(captureIfName, captureFilter, pcapWriter); err != nil {
+	if err := capture.Capture("any", captureFilter, pcapWriter); err != nil {
 		log.Printf("capture: %v", err)
 		return
 	}
