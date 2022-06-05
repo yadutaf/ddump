@@ -31,7 +31,7 @@ func Capture(ifName string, filter string, w io.Writer) error {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		if err := pcapw.WritePacket(packet.Metadata().CaptureInfo, packet.Data()); err != nil {
-			return fmt.Errorf("pcap.WritePacket(): %v", err)
+			break // Downstream closed, exit
 		}
 	}
 
