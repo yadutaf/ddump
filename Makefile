@@ -1,5 +1,7 @@
 build:
-	go build ./cmd/*
+	go build ./cmd/ddump-worker
+	go build ./cmd/ddump
 
 clean:
 	rm -f ddump-worker
+	rm -f ddump
