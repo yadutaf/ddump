@@ -5,47 +5,13 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
-
-	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
-	"github.com/yadutaf/distributed-tcpdump/pkg/streamer"
+	"github.com/yadutaf/distributed-tcpdump/pkg/merger"
 )
 
-// fanIn merges all pkt from all streams. Cancellation is supposed to e supported by producers
-func fanIn(capturedPacketsStreams ...<-chan CapturedPacket) <-chan CapturedPacket {
-	var wg sync.WaitGroup
-	out := make(chan CapturedPacket)
-
-	// Packet forwarder
-	output := func(c <-chan CapturedPacket) {
-		defer wg.Done()
-
-		for pkt := range c {
-			out <- pkt
-		}
-	}
-
-	// Start a packet forwarder for each input stream
-	for _, c := range capturedPacketsStreams {
-		go output(c)
-		wg.Add(1)
-	}
-
-	// When all forwarders are done, close donwstream too
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-
-	return out
-}
-
 func main() {
-	// Parse comand line arguments
+	// Parse command line arguments
 	flag.Parse()
 	targetUrls := flag.Args()
 
@@ -55,63 +21,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create the cancel signal
-	done := make(chan struct{})
+	// Create the stream merger
+	pcapStreamMerger := merger.NewPcapStreamMerger(os.Stdout)
 
-	// Open streams
-	respStreams := []<-chan CapturedPacket{}
-
+	// Open and register streams
 	for _, targetUrl := range targetUrls {
-		resp, err := streamer.OpenChildStream(targetUrl)
+		resp, err := merger.OpenChildStream(targetUrl)
 		if err != nil {
-			log.Fatalf("http.Get(): %v", err)
+			log.Fatalf("streamer.OpenChildStream(): %v", err)
 		}
-		respStreams = append(respStreams, StartPcapStreamer(done, resp))
+		pcapStreamMerger.Add(resp)
 	}
 
-	// Start the FanIn
-	packetFanIn := fanIn(respStreams...)
-
-	// Prepare the exit path
-	defer func() {
-		// Signal we are exiting
-		log.Printf("Exiting...")
-		close(done)
-
-		// Drain the queue, discard any pending packet (i.e. without writing to closed output)
-		log.Printf("Draining...")
-		for range packetFanIn {
-		}
-		log.Printf("All done...")
-	}()
-
-	// Initialize packet writer
-	pcapw := pcapgo.NewWriter(os.Stdout)
-	if err := pcapw.WriteFileHeader(capture.MAX_PACKET_LENGTH, layers.LinkTypeLinuxSLL); err != nil {
-		log.Fatalf("pcap.WriteFileHeader(): %v", err)
-	}
-
-	// Cleanly exit on SIGINT
+	// Wait for signal in the background
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		log.Printf("Exiting...")
+		pcapStreamMerger.Close()
+	}()
 
-	// Forward packets
-	for {
-		select {
-		case capturedPacket, ok := <-packetFanIn:
-			if !ok {
-				// Downstream channel is closed
-				log.Printf("Upstream channel is closed")
-				return
-			}
-			// Forward pending packets
-			log.Printf("Fowarding packets")
-			if err := pcapw.WritePacket(capturedPacket.ci, capturedPacket.data); err != nil {
-				log.Printf("Downstream seems to be closed, exiting: %v", err)
-				return
-			}
-		case <-sigs:
-			return
-		}
+	// Start the stream merge
+	if err := pcapStreamMerger.Start(); err != nil {
+		log.Fatalf("Failed to merge the pcap streams: %v", err)
 	}
+
+	// All done !
+	log.Printf("All done!")
 }
