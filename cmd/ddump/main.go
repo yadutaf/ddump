@@ -8,11 +8,16 @@ import (
 	"syscall"
 
 	"github.com/yadutaf/distributed-tcpdump/pkg/merger"
+	"github.com/yadutaf/distributed-tcpdump/pkg/streamer"
 )
 
 func main() {
 	// Parse command line arguments
+	caCertPath := flag.String("ca", "", "Path to trusted CA store. Defaults to system CA")
+	clientCertPath := flag.String("cert", "", "Path to PEM encoded client certificate. Defaults to none")
+	clientKeyPath := flag.String("key", "", "Path to PEM encoded client key. Defaults to none")
 	flag.Parse()
+
 	targetUrls := flag.Args()
 
 	if len(targetUrls) < 1 {
@@ -21,14 +26,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	if len(*clientCertPath) > 0 && len(*clientKeyPath) == 0 {
+		log.Fatalf("--key is mandatory when configuring --cert")
+	}
+
+	if len(*clientCertPath) == 0 && len(*clientKeyPath) > 0 {
+		log.Fatalf("--cert is mandatory when configuring --key")
+	}
+
+	// Create TLS client configuration
+	tlsClientConfig, err := streamer.InitTlSConfig(*caCertPath, *clientCertPath, *clientKeyPath)
+	if err != nil {
+		log.Fatalf("Failed to configure TLS client: %v", err)
+	}
+
 	// Create the stream merger
 	pcapStreamMerger := merger.NewPcapStreamMerger(os.Stdout)
 
 	// Open and register streams
+	childStreamer := streamer.NewStreamer(tlsClientConfig)
 	for _, targetUrl := range targetUrls {
-		resp, err := merger.OpenChildStream(targetUrl)
+		resp, err := childStreamer.OpenStream(targetUrl)
 		if err != nil {
-			log.Fatalf("streamer.OpenChildStream(): %v", err)
+			log.Fatalf("streamer.OpenStream(): %v", err)
 		}
 		pcapStreamMerger.Add(resp)
 	}
