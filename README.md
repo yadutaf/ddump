@@ -9,7 +9,9 @@ The main process runs as a command line program and outputs the merged stream on
 stdout for easy integration.
 
 The worker processes run as a long-running HTTP server, suitable for integration
-behind a streaming (i.e. non buffering) HTTP reverse proxy.
+behind a streaming (i.e. non buffering) HTTP reverse proxy. Under the hood, it
+automatically filters out its own traffic from the captures to avoid capture
+amplification.
 
 While ``ddump`` can authenticate using Basic Auth and Mutual TLS, the worker itself
 does not support authentication nor authorization. This task is left to a reverse

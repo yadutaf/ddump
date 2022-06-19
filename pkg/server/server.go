@@ -1,10 +1,9 @@
 package server
 
 import (
+	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
@@ -17,6 +16,10 @@ const (
 type FlushedResponseWriter struct {
 	w    *http.ResponseWriter
 	done chan struct{}
+}
+
+type PcapServer struct {
+	additionalFiler string
 }
 
 func NewFlushedResponseWriter(w *http.ResponseWriter) *FlushedResponseWriter {
@@ -53,12 +56,32 @@ func (frw *FlushedResponseWriter) Write(p []byte) (n int, err error) {
 	return (*frw.w).Write(p)
 }
 
-func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
+func NewPcapServer(additionalFiler string) *PcapServer {
+	return &PcapServer{
+		additionalFiler: additionalFiler,
+	}
+}
+
+func (s *PcapServer) buildFilter(captureFilter string) string {
+	// Apply additional filters (typically to filter ourselves out, to avoid amplification)
+	if captureFilter == "" {
+		return s.additionalFiler
+	} else if s.additionalFiler != "" {
+		return fmt.Sprintf("(%s) and (%s)", captureFilter, s.additionalFiler)
+	} else {
+		return captureFilter
+	}
+}
+
+func (s *PcapServer) PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode request
 	captureFilter := r.URL.Query().Get("filter")
 	if captureFilter == "" {
 		captureFilter = DEFAULT_CAPTURE_FILTER
 	}
+
+	// Apply any additional capture filters
+	captureFilter = s.buildFilter(captureFilter)
 
 	// Set content type
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
@@ -70,23 +93,4 @@ func PacketCaptureHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("capture: %v", err)
 		return
 	}
-}
-
-func Serve(listen string) error {
-	// Create listener, with support for Unix domain sockets
-	var ln net.Listener
-	var err error
-	if strings.HasPrefix(listen, "unix:") {
-		ln, err = net.Listen("unix", listen[5:])
-	} else {
-		ln, err = net.Listen("tcp", listen)
-	}
-
-	if err != nil {
-		return err
-	}
-	log.Printf("Listening on %s", listen)
-
-	// Start server
-	return http.Serve(ln, nil)
 }
