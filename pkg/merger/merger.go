@@ -10,7 +10,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 
-	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
+	"github.com/yadutaf/ddump/pkg/capture"
 )
 
 // capturedPacket is a thin wrapper to keep the packet header and payload together

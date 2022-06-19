@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yadutaf/distributed-tcpdump/pkg/server"
+	"github.com/yadutaf/ddump/pkg/server"
 )
 
 // openListener Opens a TCP or UNIX listener based one the "listen" string.

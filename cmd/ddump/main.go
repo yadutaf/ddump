@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yadutaf/distributed-tcpdump/pkg/merger"
-	"github.com/yadutaf/distributed-tcpdump/pkg/streamer"
+	"github.com/yadutaf/ddump/pkg/merger"
+	"github.com/yadutaf/ddump/pkg/streamer"
 )
 
 func main() {

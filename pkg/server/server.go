@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/yadutaf/distributed-tcpdump/pkg/capture"
+	"github.com/yadutaf/ddump/pkg/capture"
 )
 
 const (

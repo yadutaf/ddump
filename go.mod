@@ -1,4 +1,4 @@
-module github.com/yadutaf/distributed-tcpdump
+module github.com/yadutaf/ddump
 
 go 1.16
 
