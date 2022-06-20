@@ -1,3 +1,12 @@
+// Package merger is the core logic of ddump. It handles extracting captured packets
+// from an unlimitted number of readable input streams. The input streams are assumed
+// to be in the "Linux cooked" (SLL) capture format. This format guarantees that
+// captures from interfaces of various types like wlan and ethernet can be mixed in
+// a single merged stream.
+//
+// While the package is meant as the core of ddump, it is completely generic and only
+// exposes standard types like io.Writer and io.ReadCloser making it suitable for
+// inclusion in arbitrary packages.
 package merger
 
 import (
@@ -26,6 +35,9 @@ type PcapStreamMerger struct {
 	done      chan struct{}
 }
 
+// NewPcapStreamMerger builds a new stream merger for writing merged streams
+// to outStream. Initially, the stream merger does not contain any streams;
+// use Add() to register new input streams.
 func NewPcapStreamMerger(outStream io.Writer) *PcapStreamMerger {
 	return &PcapStreamMerger{
 		inStreams: []<-chan capturedPacket{},
@@ -34,7 +46,10 @@ func NewPcapStreamMerger(outStream io.Writer) *PcapStreamMerger {
 	}
 }
 
-// Add registers a new stream in the merger.
+// Add registers a new stream in the merger. Under the hood, this function starts to
+// consume packets from the input stream.
+//
+// The internal packet copy routine exits on error or when Close() has been called.
 func (m *PcapStreamMerger) Add(inStream io.ReadCloser) {
 	// Initialize the channels
 	packetStream := make(chan capturedPacket)
@@ -59,7 +74,8 @@ func (m *PcapStreamMerger) Add(inStream io.ReadCloser) {
 		// Initialize packet reader
 		pcapReader, err := pcapgo.NewReader(inStream)
 		if err != nil {
-			log.Fatalf("pcapgo.NewReader(): %v", err)
+			log.Printf("pcapgo.NewReader(): %v", err)
+			return
 		}
 
 		// Stream received packets
@@ -81,7 +97,11 @@ func (m *PcapStreamMerger) Add(inStream io.ReadCloser) {
 	m.inStreams = append(m.inStreams, packetStream)
 }
 
-// Start the pcap stream merge process
+// Start writes the pcap "SLL" header to the configured output stream and then
+// starts the fan-in of the packets provided by the input streams.
+//
+// This function is synchronous and returns when all input streams have been merged
+// or Close() has been called to request an early exit.
 func (m *PcapStreamMerger) Start() error {
 	// Initialize packet writer
 	pcapw := pcapgo.NewWriter(m.outStream)
@@ -127,6 +147,9 @@ func (m *PcapStreamMerger) Start() error {
 	}
 }
 
+// Close signals the merger to stop its processing. The actual stop occures
+// in the background. It will drain the any pending packets to avoid resource
+// leaks. Then, the Start function will return.
 func (m *PcapStreamMerger) Close() {
 	close(m.done)
 }
